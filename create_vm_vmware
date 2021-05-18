@@ -1,0 +1,64 @@
+- name: copy VM templates
+  vmware_guest:
+    hostname: "{{ vcsa.localhost.local }}"
+    username: "{{ administrator }}"
+    password: "{{ vcenter_pass }}"
+    validate_certs: False
+    datacenter: datastorage_1
+    cluster: cluster_1
+    name: VMNAME
+    template: TemplateName
+    folder: /dc1/vm/targetFolder
+    annotation: "clone is TemplateName"
+    datastore: DATASTORE_1
+    networks:
+      - name: MGMT_10
+        ip: '172.10.100.100'
+        netmask: '255.255.252.0'
+        gateway: '172.10.100.10'
+        dns_servers: [1.1.1.1, 8.8.8.8]
+        type: static
+    customization:
+      hostname: "VMNAME.localhost.local"
+      dns_servers: [1.1.1.1, 8.8.8.8]
+    wait_for_ip_address: yes
+  register: vm_facts
+
+- name: install attribute owner
+  vmware_guest_custom_attributes:
+    hostname: "{{ vcenter_server }}"
+    username: "{{ vcenter_user }}"
+    password: "{{ vcenter_pass }}"
+    validate_certs: False
+    name: VMNAME
+    uuid: "{{ vm_facts.instance.hw_product_uuid }}"
+    state: present
+    attributes:
+      - name: "Owner"
+        value: mnozhaev
+
+# add host ansible
+- name: Add new host
+  add_host:
+    name: '172.10.100.101'
+    ansible_host: '172.10.100.1'
+    ansible_user: "{{ login }}"
+    ansible_password: "{{ password }}"
+    ansible_connection: winrm
+    ansible_winrm_transport: basic
+
+# start host ping
+- name: Ansible ping
+  win_ping:
+  delegate_to: '172.10.100.100'
+  register: result
+  until: result.ping == "pong"
+  retries: 20
+  delay: 6
+
+
+- name: install postgresql chocolatey
+  win_chocolatey:
+    name: postgresql
+    state: present
+  delegate_to: '172.10.100.100'
